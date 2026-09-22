@@ -3,7 +3,6 @@ import { X, Download, Loader2, FileText, Maximize2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { batchPredict, lipinskiViolations } from '../../services/api'
 import { generateMoleculeReport } from '../../services/pdfReport'
-import MoleculeViewer2D from './MoleculeViewer2D'
 import MoleculeViewer3D from './MoleculeViewer3D'
 import type { Molecule } from '../../types'
 
@@ -13,9 +12,8 @@ interface Props {
 }
 
 export default function MoleculeReportModal({ molecule, onClose }: Props) {
-  const [busy,    setBusy]    = useState(false)
-  const [view,    setView]    = useState<'2d' | '3d'>('2d')
-  const [expand,  setExpand]  = useState(false)
+  const [busy,   setBusy]   = useState(false)
+  const [expand, setExpand] = useState(false)
 
   const handleDownload = async () => {
     setBusy(true)
@@ -99,35 +97,13 @@ export default function MoleculeReportModal({ molecule, onClose }: Props) {
 
             {/* ── Left: Structure viewer ── */}
             <div className="space-y-3">
-              {/* 2D / 3D toggle */}
+              {/* 3D Structure viewer */}
               <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Structure</p>
-                <div className="flex rounded-lg border border-white/10 overflow-hidden text-xs">
-                  {(['2d', '3d'] as const).map(v => (
-                    <button key={v} onClick={() => setView(v)}
-                      className={`px-4 py-1.5 font-medium transition-colors ${
-                        view === v
-                          ? 'bg-purple-600 text-white'
-                          : 'text-slate-400 hover:text-white hover:bg-white/5'
-                      }`}>
-                      {v.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">3D Structure</p>
               </div>
 
-              {/* Viewer */}
               <div className={`rounded-xl overflow-hidden border border-white/5 ${expand ? 'h-72' : 'h-56'}`}>
-                {view === '2d' ? (
-                  <MoleculeViewer2D
-                    smiles={molecule.smiles}
-                    width={expand ? 500 : 400}
-                    height={expand ? 280 : 220}
-                    theme="dark"
-                  />
-                ) : (
-                  <MoleculeViewer3D smiles={molecule.smiles} />
-                )}
+                <MoleculeViewer3D smiles={molecule.smiles} />
               </div>
 
               {/* SMILES string */}

@@ -10,7 +10,6 @@ import { Button } from '../ui/button'
 import {
   validateSmiles, getChemicalSpace, getSimilarityNetwork,
 } from '../../services/api'
-import MoleculeViewer2D from '../ui/MoleculeViewer2D'
 import MoleculeViewer3D from '../ui/MoleculeViewer3D'
 
 const inp = 'w-full rounded-lg border border-white/10 bg-slate-700/50 px-3 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-purple-500'
@@ -86,7 +85,6 @@ function ValidatorCard() {
 function ViewerCard() {
   const [smiles,  setSmiles]  = useState('')
   const [active,  setActive]  = useState('')
-  const [view,    setView]    = useState<'2d' | '3d'>('2d')
   const [viewed,  setViewed]  = useState(false)
 
   const handleView = () => {
@@ -112,26 +110,8 @@ function ViewerCard() {
         </div>
 
         {viewed && active && (
-          <div className="space-y-2">
-            {/* 2D / 3D toggle */}
-            <div className="flex rounded-lg border border-white/10 overflow-hidden text-xs w-fit">
-              {(['2d', '3d'] as const).map(v => (
-                <button key={v} onClick={() => setView(v)}
-                  className={`px-4 py-1.5 font-medium transition-colors ${
-                    view === v ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
-                  }`}>
-                  {v.toUpperCase()}
-                </button>
-              ))}
-            </div>
-
-            {/* Viewer */}
-            <div className="h-64 rounded-xl overflow-hidden border border-white/5">
-              {view === '2d'
-                ? <MoleculeViewer2D smiles={active} width={480} height={256} theme="dark" />
-                : <MoleculeViewer3D smiles={active} />
-              }
-            </div>
+          <div className="h-64 rounded-xl overflow-hidden border border-white/5">
+            <MoleculeViewer3D smiles={active} />
           </div>
         )}
       </CardContent>
