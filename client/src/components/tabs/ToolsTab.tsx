@@ -8,8 +8,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { Button } from '../ui/button'
 import {
-  validateSmiles, getMoleculeImage, getChemicalSpace, getSimilarityNetwork,
+  validateSmiles, getChemicalSpace, getSimilarityNetwork,
 } from '../../services/api'
+import MoleculeViewer2D from '../ui/MoleculeViewer2D'
 import MoleculeViewer3D from '../ui/MoleculeViewer3D'
 
 const inp = 'w-full rounded-lg border border-white/10 bg-slate-700/50 px-3 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-purple-500'
@@ -80,25 +81,18 @@ function ValidatorCard() {
 }
 
 // ---------------------------------------------------------------------------
-// Card 2 — Molecule Viewer
+// Card 2 — Molecule Viewer (2D / 3D)
 // ---------------------------------------------------------------------------
 function ViewerCard() {
-  const [smiles,   setSmiles]   = useState('')
-  const [imgSrc,   setImgSrc]   = useState<string | null>(null)
-  const [busy,     setBusy]     = useState(false)
-  const [view3D,   setView3D]   = useState(false)
-  const [viewed,   setViewed]   = useState(false)
+  const [smiles,  setSmiles]  = useState('')
+  const [active,  setActive]  = useState('')
+  const [view,    setView]    = useState<'2d' | '3d'>('2d')
+  const [viewed,  setViewed]  = useState(false)
 
-  const view = async () => {
+  const handleView = () => {
     if (!smiles.trim()) return toast.error('Enter a SMILES string')
-    setBusy(true); setImgSrc(null); setViewed(false)
-    try {
-      const res = await getMoleculeImage(smiles.trim())
-      setImgSrc(res.image)
-      setViewed(true)
-    } catch {
-      setViewed(true)
-    } finally { setBusy(false) }
+    setActive(smiles.trim())
+    setViewed(true)
   }
 
   return (
@@ -109,37 +103,34 @@ function ViewerCard() {
       <CardContent className="space-y-3">
         <div className="flex gap-2">
           <input value={smiles} onChange={e => setSmiles(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && view()}
-            placeholder="e.g. c1ccccc1" className={inp} />
-          <Button size="sm" onClick={view} disabled={busy}
-            className="bg-purple-600 hover:bg-purple-500 text-white shrink-0 flex items-center gap-1.5">
-            {busy ? <Loader2 size={13} className="animate-spin" /> : null}
+            onKeyDown={e => e.key === 'Enter' && handleView()}
+            placeholder="e.g. CC(=O)Oc1ccccc1C(=O)O" className={inp} />
+          <Button size="sm" onClick={handleView}
+            className="bg-purple-600 hover:bg-purple-500 text-white shrink-0">
             View
           </Button>
         </div>
 
-        {viewed && (
+        {viewed && active && (
           <div className="space-y-2">
+            {/* 2D / 3D toggle */}
             <div className="flex rounded-lg border border-white/10 overflow-hidden text-xs w-fit">
-              {(['2D', '3D'] as const).map(v => (
-                <button key={v} onClick={() => setView3D(v === '3D')}
-                  className={`px-3 py-1 transition-colors ${(v === '3D') === view3D ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'}`}>
-                  {v}
+              {(['2d', '3d'] as const).map(v => (
+                <button key={v} onClick={() => setView(v)}
+                  className={`px-4 py-1.5 font-medium transition-colors ${
+                    view === v ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+                  }`}>
+                  {v.toUpperCase()}
                 </button>
               ))}
             </div>
-            <div className="h-48 rounded-xl overflow-hidden border border-white/5">
-              {view3D ? (
-                <MoleculeViewer3D smiles={smiles} />
-              ) : imgSrc ? (
-                <div className="w-full h-full flex items-center justify-center bg-white">
-                  <img src={`data:image/svg+xml;base64,${imgSrc}`} alt="2D structure" className="max-h-full object-contain" />
-                </div>
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-slate-800/40">
-                  <p className="font-mono text-sm text-purple-300 px-4 text-center break-all">{smiles}</p>
-                </div>
-              )}
+
+            {/* Viewer */}
+            <div className="h-64 rounded-xl overflow-hidden border border-white/5">
+              {view === '2d'
+                ? <MoleculeViewer2D smiles={active} width={480} height={256} theme="dark" />
+                : <MoleculeViewer3D smiles={active} />
+              }
             </div>
           </div>
         )}
