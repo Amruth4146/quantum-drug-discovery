@@ -1,34 +1,38 @@
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, AlertCircle } from 'lucide-react'
 
+// SmilesDrawer is loaded via CDN script tag in index.html → window.SmilesDrawer
+declare const SmilesDrawer: any
+
 interface Props {
-  smiles: string
+  smiles:  string
   width?:  number
   height?: number
   theme?:  'dark' | 'light'
 }
 
-// Unique ID counter so multiple viewers on the same page don't clash
-let idCounter = 0
+let _counter = 0
 
 export default function MoleculeViewer2D({ smiles, width = 400, height = 280, theme = 'dark' }: Props) {
-  const idRef    = useRef(`sd-svg-${++idCounter}`)
+  const svgId  = useRef(`mol2d-${++_counter}`)
   const [status, setStatus] = useState<'loading' | 'done' | 'error'>('loading')
 
   useEffect(() => {
     if (!smiles?.trim()) return
     setStatus('loading')
-    let cancelled = false
 
-    import('smiles-drawer').then((mod) => {
-      if (cancelled) return
-
-      const SD = (mod.default ?? mod) as any
+    // Wait for SmilesDrawer to be available on window (CDN loads async)
+    const tryRender = (attempts = 0) => {
+      if (typeof SmilesDrawer === 'undefined' || !SmilesDrawer?.SvgDrawer) {
+        if (attempts > 30) { setStatus('error'); return }
+        setTimeout(() => tryRender(attempts + 1), 100)
+        return
+      }
 
       const options = {
         width,
         height,
-        bondThickness:     1.5,
+        bondThickness:     1.6,
         bondLength:        28,
         shortBondLength:   0.85,
         bondSpacing:       4.0,
@@ -72,47 +76,45 @@ export default function MoleculeViewer2D({ smiles, width = 400, height = 280, th
         },
       }
 
-      const svgId = idRef.current
-
-      // SvgDrawer.draw takes the SVG element's ID string
-      const svgDrawer = new SD.SvgDrawer(options)
-
-      SD.parse(
-        smiles,
-        (tree: any) => {
-          if (cancelled) return
-          try {
-            svgDrawer.draw(tree, svgId, theme, false)
-            setStatus('done')
-          } catch (err) {
-            console.warn('[MoleculeViewer2D] SvgDrawer.draw failed:', err)
+      try {
+        const drawer = new SmilesDrawer.SvgDrawer(options)
+        SmilesDrawer.parse(
+          smiles,
+          (tree: any) => {
+            try {
+              drawer.draw(tree, svgId.current, theme, false)
+              setStatus('done')
+            } catch (e) {
+              console.warn('[MoleculeViewer2D] draw error:', e)
+              setStatus('error')
+            }
+          },
+          (e: any) => {
+            console.warn('[MoleculeViewer2D] parse error:', e)
             setStatus('error')
           }
-        },
-        (err: any) => {
-          console.warn('[MoleculeViewer2D] parse failed:', err)
-          if (!cancelled) setStatus('error')
-        }
-      )
-    }).catch((err) => {
-      console.error('[MoleculeViewer2D] import failed:', err)
-      if (!cancelled) setStatus('error')
-    })
+        )
+      } catch (e) {
+        console.warn('[MoleculeViewer2D] SvgDrawer error:', e)
+        setStatus('error')
+      }
+    }
 
-    return () => { cancelled = true }
+    tryRender()
   }, [smiles, width, height, theme])
 
   const bg = theme === 'dark' ? '#0f172a' : '#f8fafc'
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center rounded-xl overflow-hidden"
+    <div
+      className="relative w-full h-full flex items-center justify-center rounded-xl overflow-hidden"
       style={{ background: bg }}>
 
       {status === 'loading' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10"
           style={{ background: bg }}>
           <Loader2 size={22} className="animate-spin text-purple-400" />
-          <p className="text-xs text-slate-500">Rendering structure…</p>
+          <p className="text-xs text-slate-500">Rendering 2D structure…</p>
         </div>
       )}
 
@@ -120,22 +122,22 @@ export default function MoleculeViewer2D({ smiles, width = 400, height = 280, th
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 z-10"
           style={{ background: bg }}>
           <AlertCircle size={24} className="text-red-400" />
-          <p className="text-xs text-slate-400 text-center">Unable to render 2D structure</p>
-          <code className="text-xs text-purple-400 font-mono text-center break-all bg-slate-800/60 rounded px-2 py-1 w-full">
+          <p className="text-xs text-slate-400">Unable to render structure</p>
+          <code className="text-xs text-purple-300 font-mono break-all bg-slate-800/60 rounded px-2 py-1 text-center w-full">
             {smiles}
           </code>
         </div>
       )}
 
-      {/* SvgDrawer targets this element by its id */}
+      {/* SvgDrawer targets this SVG element by its id string */}
       <svg
-        id={idRef.current}
+        id={svgId.current}
         width={width}
         height={height}
         style={{
-          maxWidth:  '100%',
-          maxHeight: '100%',
-          opacity:   status === 'done' ? 1 : 0,
+          maxWidth:   '100%',
+          maxHeight:  '100%',
+          opacity:    status === 'done' ? 1 : 0,
           transition: 'opacity 0.3s',
         }}
       />
