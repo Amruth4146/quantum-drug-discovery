@@ -1,43 +1,43 @@
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, AlertCircle } from 'lucide-react'
 
-// SmilesDrawer dynamically imported to avoid SSR issues
 interface Props {
   smiles: string
-  width?: number
+  width?:  number
   height?: number
-  theme?: 'dark' | 'light'
+  theme?:  'dark' | 'light'
 }
 
-export default function MoleculeViewer2D({ smiles, width = 400, height = 300, theme = 'dark' }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+// Unique ID counter so multiple viewers on the same page don't clash
+let idCounter = 0
+
+export default function MoleculeViewer2D({ smiles, width = 400, height = 280, theme = 'dark' }: Props) {
+  const idRef    = useRef(`sd-svg-${++idCounter}`)
   const [status, setStatus] = useState<'loading' | 'done' | 'error'>('loading')
 
   useEffect(() => {
-    if (!smiles || !canvasRef.current) return
+    if (!smiles?.trim()) return
     setStatus('loading')
-
     let cancelled = false
 
     import('smiles-drawer').then((mod) => {
-      if (cancelled || !canvasRef.current) return
+      if (cancelled) return
 
-      const SmilesDrawer = mod.default ?? mod
+      const SD = (mod.default ?? mod) as any
 
-      // Professional dark theme colours matching the app
       const options = {
         width,
         height,
-        bondThickness:       1.5,
-        bondLength:          22,
-        shortBondLength:     0.85,
-        bondSpacing:         3.5,
-        atomVisualization:   'default',
-        fontSizeLarge:       8,
-        fontSizeSmall:       6,
-        padding:             20,
-        terminalCarbons:     false,
-        explicitHydrogens:   false,
+        bondThickness:     1.5,
+        bondLength:        28,
+        shortBondLength:   0.85,
+        bondSpacing:       4.0,
+        atomVisualization: 'default',
+        fontSizeLarge:     10,
+        fontSizeSmall:     6,
+        padding:           28,
+        terminalCarbons:   false,
+        explicitHydrogens: false,
         themes: {
           dark: {
             C:          '#e2e8f0',
@@ -51,7 +51,7 @@ export default function MoleculeViewer2D({ smiles, width = 400, height = 300, th
             S:          '#fbbf24',
             B:          '#f472b6',
             SI:         '#94a3b8',
-            H:          '#94a3b8',
+            H:          '#64748b',
             BACKGROUND: '#0f172a',
           },
           light: {
@@ -66,61 +66,78 @@ export default function MoleculeViewer2D({ smiles, width = 400, height = 300, th
             S:          '#ca8a04',
             B:          '#db2777',
             SI:         '#64748b',
-            H:          '#64748b',
+            H:          '#9ca3af',
             BACKGROUND: '#f8fafc',
           },
         },
       }
 
-      const drawer = new SmilesDrawer.Drawer(options)
+      const svgId = idRef.current
 
-      SmilesDrawer.parse(
+      // SvgDrawer.draw takes the SVG element's ID string
+      const svgDrawer = new SD.SvgDrawer(options)
+
+      SD.parse(
         smiles,
         (tree: any) => {
-          if (cancelled || !canvasRef.current) return
+          if (cancelled) return
           try {
-            drawer.draw(tree, canvasRef.current, theme, false)
+            svgDrawer.draw(tree, svgId, theme, false)
             setStatus('done')
-          } catch {
+          } catch (err) {
+            console.warn('[MoleculeViewer2D] SvgDrawer.draw failed:', err)
             setStatus('error')
           }
         },
-        () => {
+        (err: any) => {
+          console.warn('[MoleculeViewer2D] parse failed:', err)
           if (!cancelled) setStatus('error')
         }
       )
-    }).catch(() => {
+    }).catch((err) => {
+      console.error('[MoleculeViewer2D] import failed:', err)
       if (!cancelled) setStatus('error')
     })
 
     return () => { cancelled = true }
   }, [smiles, width, height, theme])
 
+  const bg = theme === 'dark' ? '#0f172a' : '#f8fafc'
+
   return (
     <div className="relative w-full h-full flex items-center justify-center rounded-xl overflow-hidden"
-      style={{ background: theme === 'dark' ? '#0f172a' : '#f8fafc' }}>
+      style={{ background: bg }}>
 
       {status === 'loading' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-900">
-          <Loader2 size={20} className="animate-spin text-purple-400" />
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10"
+          style={{ background: bg }}>
+          <Loader2 size={22} className="animate-spin text-purple-400" />
           <p className="text-xs text-slate-500">Rendering structure…</p>
         </div>
       )}
 
       {status === 'error' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-900">
-          <AlertCircle size={20} className="text-red-400" />
-          <p className="text-xs text-slate-500">Could not render structure</p>
-          <p className="text-xs text-slate-600 font-mono px-4 text-center break-all">{smiles}</p>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 z-10"
+          style={{ background: bg }}>
+          <AlertCircle size={24} className="text-red-400" />
+          <p className="text-xs text-slate-400 text-center">Unable to render 2D structure</p>
+          <code className="text-xs text-purple-400 font-mono text-center break-all bg-slate-800/60 rounded px-2 py-1 w-full">
+            {smiles}
+          </code>
         </div>
       )}
 
-      <canvas
-        ref={canvasRef}
+      {/* SvgDrawer targets this element by its id */}
+      <svg
+        id={idRef.current}
         width={width}
         height={height}
-        className="max-w-full max-h-full"
-        style={{ opacity: status === 'done' ? 1 : 0, transition: 'opacity 0.3s' }}
+        style={{
+          maxWidth:  '100%',
+          maxHeight: '100%',
+          opacity:   status === 'done' ? 1 : 0,
+          transition: 'opacity 0.3s',
+        }}
       />
     </div>
   )
