@@ -12,10 +12,15 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? ''
 export const client = axios.create({ baseURL: BASE_URL, timeout: 60000 })
 
 // ---------------------------------------------------------------------------
-// Request interceptor
+// Request interceptor — attach auth token + request time
 // ---------------------------------------------------------------------------
 client.interceptors.request.use((config) => {
   config.headers['x-request-time'] = Date.now().toString()
+  // Auto-attach JWT token from localStorage if available
+  const token = localStorage.getItem('vdd_token')
+  if (token && !config.headers['Authorization']) {
+    config.headers['Authorization'] = `Bearer ${token}`
+  }
   return config
 })
 
@@ -339,3 +344,32 @@ export const authUpdateProfile = (token: string, data: {
   client.put('/api/auth/profile', data, {
     headers: { Authorization: `Bearer ${token}` },
   }).then(r => r.data)
+
+// Records logout time in auth_audit_log on the server
+export const authLogout = (token: string): Promise<{ message: string }> =>
+  client.post('/api/auth/logout', {}, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then(r => r.data)
+
+// ---------------------------------------------------------------------------
+// Auth Audit Log
+// ---------------------------------------------------------------------------
+export interface AuthAuditEntry {
+  id:           string
+  user_id:      string
+  full_name:    string
+  email:        string
+  event:        string
+  session_id:   string
+  login_time:   string
+  logout_time:  string | null
+  status:       'active' | 'logged_out' | 'failed'
+}
+
+// Current user's own session history
+export const getMyAuthAudit = (limit = 50): Promise<AuthAuditEntry[]> =>
+  client.get('/api/auth/audit/me', { params: { limit } }).then(r => r.data)
+
+// Admin — all users' auth events
+export const getAuthAuditLog = (limit = 100): Promise<AuthAuditEntry[]> =>
+  client.get('/api/auth/audit', { params: { limit } }).then(r => r.data)

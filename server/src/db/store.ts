@@ -5,22 +5,30 @@ import type { AuditEvent } from '../types'
 // ---------------------------------------------------------------------------
 // Audit log
 // ---------------------------------------------------------------------------
-export async function addAudit(eventType: string, details: string): Promise<void> {
+export async function addAudit(eventType: string, details: string, userId?: string): Promise<void> {
   try {
     await execute(
-      'INSERT INTO audit_logs (event_type, details, timestamp) VALUES ($1,$2,$3)',
-      [eventType, details, new Date().toISOString()]
+      'INSERT INTO audit_logs (event_type, details, user_id, timestamp) VALUES ($1,$2,$3,$4)',
+      [eventType, details, userId ?? null, new Date().toISOString()]
     )
   } catch (e: any) {
     console.error('[Store] addAudit failed:', e.message)
   }
 }
 
-export async function getAuditLogs(limit = 100): Promise<AuditEvent[]> {
-  const rows = await query(
-    'SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT $1',
-    [limit]
-  )
+export async function getAuditLogs(limit = 100, userId?: string): Promise<AuditEvent[]> {
+  let rows
+  if (userId) {
+    rows = await query(
+      'SELECT * FROM audit_logs WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2',
+      [userId, limit]
+    )
+  } else {
+    rows = await query(
+      'SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT $1',
+      [limit]
+    )
+  }
   return rows.map(r => ({
     id:        r.id,
     eventType: r.event_type,

@@ -1,4 +1,5 @@
 ﻿import { createContext, useContext, useState, ReactNode } from "react"
+import { authLogout } from "../services/api"
 
 export interface AuthUser {
   id:         string
@@ -52,8 +53,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
-    setUser(null); setToken(null)
-    localStorage.removeItem(KEY); localStorage.removeItem(TOKEN_KEY)
+    // Tell the server to record the logout time in auth_audit_log
+    const t = localStorage.getItem(TOKEN_KEY)
+    if (t) {
+      authLogout(t).catch(() => {
+        // Non-fatal — proceed with local logout regardless
+      })
+    }
+    setUser(null)
+    setToken(null)
+    // Clear auth data from storage — token never lives beyond logout
+    localStorage.removeItem(KEY)
+    localStorage.removeItem(TOKEN_KEY)
   }
 
   return <Ctx.Provider value={{ user, token, login, logout }}>{children}</Ctx.Provider>
