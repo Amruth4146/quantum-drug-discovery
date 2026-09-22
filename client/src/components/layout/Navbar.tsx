@@ -11,6 +11,7 @@ const tabs = [
   { label: 'Predictions', path: '/app/predictions' },
   { label: 'Experiments', path: '/app/experiments' },
   { label: 'Training',    path: '/app/training' },
+  { label: 'Search',      path: '/app/search' },
   { label: 'Tools',       path: '/app/tools' },
   { label: 'Audit',       path: '/app/audit' },
 ]
@@ -20,7 +21,10 @@ export default function Navbar() {
   const navigate         = useNavigate()
   const { user, logout } = useAuth()
   const [online,    setOnline]    = useState<boolean | null>(null)
-  const [dark,      setDark]      = useState(true)
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem('vdd_theme')
+    return saved ? saved === 'dark' : true // default dark
+  })
   const [menuOpen,  setMenuOpen]  = useState(false)
   const [mobileNav, setMobileNav] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -34,6 +38,7 @@ export default function Navbar() {
 
   useEffect(() => {
     document.documentElement.classList.toggle('light', !dark)
+    localStorage.setItem('vdd_theme', dark ? 'dark' : 'light')
   }, [dark])
 
   // Close dropdown on outside click

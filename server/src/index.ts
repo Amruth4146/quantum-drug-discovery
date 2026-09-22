@@ -5,6 +5,7 @@ import cors from 'cors'
 import helmet from 'helmet'
 import morgan from 'morgan'
 import path from 'path'
+import rateLimit from 'express-rate-limit'
 import { errorHandler } from './middleware/errorHandler'
 import { auditLogger } from './middleware/auditLogger'
 import { addAudit, ensureSeeded } from './db/store'
@@ -53,6 +54,23 @@ app.use(morgan('dev'))
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 app.use(auditLogger)
 
+// Rate limiting — stricter on auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  message: { error: 'Too many requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 120,
+  message: { error: 'Too many requests, please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }))
 
 // Manual seed trigger — call POST /api/admin/seed to force seeding after cold-start failures
@@ -64,7 +82,8 @@ app.post('/api/admin/seed', async (_req, res) => {
     res.status(500).json({ error: (e as Error).message })
   }
 })
-app.use('/api', apiRoutes)
+app.use('/api/auth', authLimiter)
+app.use('/api', apiLimiter, apiRoutes)
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'Route not found', status: 404 })

@@ -11,6 +11,8 @@ import TrainingTab         from '../components/tabs/TrainingTab'
 import MoleculeSearchTab   from '../components/tabs/MoleculeSearchTab'
 import DatasetComparisonTab from '../components/tabs/DatasetComparisonTab'
 import SharingTab          from '../components/tabs/SharingTab'
+import NotFoundPage        from '../pages/NotFoundPage'
+import { ErrorBoundary }   from '../components/ui/ErrorBoundary'
 
 const fadeStyle = `
   @keyframes fadeInUp {
@@ -31,16 +33,17 @@ export default function AppShell() {
         <div key={pathname} className="tab-enter">
           <Routes>
             <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard"   element={<DashboardTab />} />
-            <Route path="analysis"    element={<AnalysisTab />} />
-            <Route path="predictions" element={<PredictionsTab />} />
-            <Route path="experiments" element={<ExperimentsTab />} />
-            <Route path="audit"       element={<AuditTab />} />
-            <Route path="tools"       element={<ToolsTab />} />
-            <Route path="training"    element={<TrainingTab />} />
-            <Route path="search"      element={<MoleculeSearchTab />} />
-            <Route path="compare"     element={<DatasetComparisonTab />} />
-            <Route path="sharing"     element={<SharingTab />} />
+            <Route path="dashboard"   element={<ErrorBoundary><DashboardTab /></ErrorBoundary>} />
+            <Route path="analysis"    element={<ErrorBoundary><AnalysisTab /></ErrorBoundary>} />
+            <Route path="predictions" element={<ErrorBoundary><PredictionsTab /></ErrorBoundary>} />
+            <Route path="experiments" element={<ErrorBoundary><ExperimentsTab /></ErrorBoundary>} />
+            <Route path="audit"       element={<ErrorBoundary><AuditTab /></ErrorBoundary>} />
+            <Route path="tools"       element={<ErrorBoundary><ToolsTab /></ErrorBoundary>} />
+            <Route path="training"    element={<ErrorBoundary><TrainingTab /></ErrorBoundary>} />
+            <Route path="search"      element={<ErrorBoundary><MoleculeSearchTab /></ErrorBoundary>} />
+            <Route path="compare"     element={<ErrorBoundary><DatasetComparisonTab /></ErrorBoundary>} />
+            <Route path="sharing"     element={<ErrorBoundary><SharingTab /></ErrorBoundary>} />
+            <Route path="*"           element={<NotFoundPage />} />
           </Routes>
         </div>
       </main>

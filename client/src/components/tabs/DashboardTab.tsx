@@ -8,6 +8,7 @@ import {
   getDashboardStats, getCorrelations, getFavorites,
   uploadDataset, addFavorite, deleteFavorite, buildHistogram,
 } from '../../services/api'
+import { useNotifications } from '../../context/NotificationContext'
 import type { DashboardStats, Favorite } from '../../types'
 
 // ---------------------------------------------------------------------------
@@ -73,7 +74,7 @@ function HistoCard({ title, values, color }: { title: string; values: number[]; 
 // ---------------------------------------------------------------------------
 // Upload card
 // ---------------------------------------------------------------------------
-function UploadCard({ onUploaded }: { onUploaded: () => void }) {
+function UploadCard({ onUploaded, onNotify }: { onUploaded: () => void; onNotify: (type: 'info'|'alert', title: string, msg: string) => void }) {
   const [filename, setFilename] = useState<string | null>(null)
   const [rows, setRows]         = useState<number | null>(null)
   const [busy, setBusy]         = useState(false)
@@ -88,9 +89,10 @@ function UploadCard({ onUploaded }: { onUploaded: () => void }) {
       setFilename(file.name)
       setRows(res.rows)
       toast.success(res.message)
+      onNotify('info', 'Dataset Uploaded', `${file.name} — ${res.rows} molecules imported`)
       onUploaded()
     } catch {
-      // interceptor already toasted
+      onNotify('alert', 'Upload Failed', `Failed to upload ${file.name}`)
     } finally {
       setBusy(false)
       if (inputRef.current) inputRef.current.value = ''
@@ -269,6 +271,7 @@ export default function DashboardTab() {
   const [favs,     setFavs]     = useState<Favorite[]>([])
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState<string | null>(null)
+  const { push } = useNotifications()
 
   const fetchAll = async () => {
     setLoading(true); setError(null)
@@ -343,15 +346,25 @@ export default function DashboardTab() {
 
       {/* Row 2 — Upload + Favorites */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <UploadCard onUploaded={fetchAll} />
+        <UploadCard onUploaded={fetchAll} onNotify={push} />
         <FavoritesCard favorites={favs} onAdd={handleAddFav} onDelete={handleDeleteFav} />
       </div>
 
       {/* Row 3 — Correlations */}
-      {!loading && <CorrelationChart data={corrData} />}
+      {loading ? (
+        <div className="animate-pulse rounded-xl border border-white/5 bg-slate-800/40 p-5 h-64" />
+      ) : (
+        <CorrelationChart data={corrData} />
+      )}
 
       {/* Row 4 — Histograms */}
-      {!loading && (
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="animate-pulse rounded-xl border border-white/5 bg-slate-800/40 p-5 h-48" />
+          ))}
+        </div>
+      ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <HistoCard title="Molecular Weight Distribution" values={dist?.MolecularWeight ?? []} color="#818cf8" />
           <HistoCard title="LogP Distribution"             values={dist?.LogP ?? []}            color="#34d399" />
