@@ -9,7 +9,7 @@ import type {
 // All requests go through Vite proxy in dev, or VITE_API_URL in production
 const BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
-export const client = axios.create({ baseURL: BASE_URL, timeout: 30000 })
+export const client = axios.create({ baseURL: BASE_URL, timeout: 60000 })
 
 // ---------------------------------------------------------------------------
 // Request interceptor
@@ -32,7 +32,7 @@ client.interceptors.response.use(
     if (!err.response) {
       _networkFailures++
       const msg = _networkFailures <= 2
-        ? 'Backend is waking up, please try again in a moment…'
+        ? 'Backend is waking up (Render free tier) — please wait ~30 seconds and try again…'
         : 'Backend offline — cannot reach the server'
       toast.error(msg)
     } else if (err.response.status === 404) {
@@ -201,7 +201,7 @@ export const getAuditLog = (limit = 100): Promise<AuditEvent[]> =>
 // ---------------------------------------------------------------------------
 export const checkBackendHealth = async (): Promise<boolean> => {
   try {
-    await client.get('/api/health', { timeout: 8000 })
+    await client.get('/api/health', { timeout: 55000 })
     return true
   } catch {
     return false

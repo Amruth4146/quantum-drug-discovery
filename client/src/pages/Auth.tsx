@@ -93,7 +93,6 @@ export default function Auth() {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))  e.email      = 'Enter a valid email address'
     if (!suPassword)                                      e.suPassword = 'Password is required'
     else if (suPassword.length < 8)                       e.suPassword = 'At least 8 characters'
-    else if (strength.score < 2)                          e.suPassword = 'Password is too weak'
     if (!confirmPw)                                       e.confirmPw  = 'Please confirm your password'
     else if (confirmPw !== suPassword)                    e.confirmPw  = 'Passwords do not match'
     setErrors(e)
@@ -143,7 +142,7 @@ export default function Auth() {
       const userMsg = msg.includes('Cannot read') || msg.includes('undefined')
         ? 'Server is offline or unreachable. Please try again later.'
         : msg
-      setErrors({ email: userMsg })
+      setErrors({ suPassword: userMsg })
     } finally { setBusy(false) }
   }
 
@@ -337,7 +336,6 @@ export default function Auth() {
                       strength.score === 2 ? 'text-yellow-400' :
                       strength.score === 3 ? 'text-blue-400' : 'text-green-400'
                     }`}>{strength.label}</span>
-                    <span className="ml-2 text-slate-600">Use uppercase, numbers & symbols</span>
                   </p>
                 </div>
               )}
