@@ -55,12 +55,12 @@ export default function Navbar() {
     <>
       <nav className="sticky top-0 z-40 border-b border-white/5 bg-slate-900/95 backdrop-blur px-4 md:px-6 flex items-center gap-3 h-14">
         {/* Logo */}
-        <Link to="/app/dashboard" className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 select-none">
           <Atom size={20} className="text-purple-400" />
           <span className="font-bold text-sm bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent hidden sm:block">
             QuantumDrug ML
           </span>
-        </Link>
+        </div>
 
         {/* Desktop tabs — hidden on mobile */}
         <div className="hidden md:flex flex-1 items-center gap-0.5 overflow-x-auto scrollbar-none">
