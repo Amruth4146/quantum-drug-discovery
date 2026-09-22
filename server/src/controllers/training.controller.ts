@@ -1,16 +1,13 @@
 import { Request, Response } from 'express'
 import { v4 as uuid } from 'uuid'
-import { supabase } from '../db/supabase'
+import { query, queryOne, execute } from '../db/supabase'
 import { addAudit } from '../db/store'
 import {
   estimateMolecularWeight, estimateLogP, estimateTPSA,
-  countHBondDonors, countHBondAcceptors, countRotatableBonds,
 } from '../services/chemService'
 import type { TrainedModel } from '../types'
 
-const COL = 'trained_models'
-
-function fromRow(r: Record<string, any>): TrainedModel {
+function fromRow(r: any): TrainedModel {
   return {
     id:             r.id,
     name:           r.name,
@@ -18,14 +15,14 @@ function fromRow(r: Record<string, any>): TrainedModel {
     targetProperty: r.target_property,
     epochs:         r.epochs,
     batchSize:      r.batch_size,
-    learningRate:   r.learning_rate,
-    trainSplit:     r.train_split,
+    learningRate:   parseFloat(r.learning_rate),
+    trainSplit:     parseFloat(r.train_split),
     status:         r.status,
-    accuracy:       r.accuracy ?? undefined,
-    loss:           r.loss ?? undefined,
-    valLoss:        r.val_loss ?? undefined,
-    r2Score:        r.r2_score ?? undefined,
-    mae:            r.mae ?? undefined,
+    accuracy:       r.accuracy != null ? parseFloat(r.accuracy) : undefined,
+    loss:           r.loss     != null ? parseFloat(r.loss)     : undefined,
+    valLoss:        r.val_loss != null ? parseFloat(r.val_loss) : undefined,
+    r2Score:        r.r2_score != null ? parseFloat(r.r2_score) : undefined,
+    mae:            r.mae      != null ? parseFloat(r.mae)      : undefined,
     trainingLog:    r.training_log ?? [],
     datasetId:      r.dataset_id ?? undefined,
     createdAt:      r.created_at,
@@ -33,9 +30,6 @@ function fromRow(r: Record<string, any>): TrainedModel {
   }
 }
 
-// ---------------------------------------------------------------------------
-// POST /api/training/start
-// ---------------------------------------------------------------------------
 export async function startTraining(req: Request, res: Response) {
   const {
     name, modelType = 'regression', targetProperty = 'bindingAffinity',
@@ -49,78 +43,49 @@ export async function startTraining(req: Request, res: Response) {
 
   const modelId = uuid()
   const now = new Date().toISOString()
-
-  // Simulate training log
   const trainingLog = Array.from({ length: Math.min(epochs, 10) }, (_, i) => ({
-    epoch:   i + 1,
+    epoch: i + 1,
     loss:    +(0.5 * Math.exp(-i * 0.3)).toFixed(6),
     valLoss: +(0.55 * Math.exp(-i * 0.28)).toFixed(6),
     mae:     +(0.4 * Math.exp(-i * 0.25)).toFixed(6),
   }))
 
-  const record = {
-    id:              modelId,
-    name:            name.trim(),
-    model_type:      modelType,
-    target_property: targetProperty,
-    epochs,
-    batch_size:      batchSize,
-    learning_rate:   learningRate,
-    train_split:     trainSplit,
-    status:          'completed',
-    loss:            0.042,
-    val_loss:        0.051,
-    mae:             0.198,
-    r2_score:        0.87,
-    accuracy:        0.91,
-    training_log:    trainingLog,
-    dataset_id:      datasetId ?? null,
-    created_at:      now,
-    updated_at:      now,
-  }
-
-  const { error } = await supabase.from(COL).insert(record)
-  if (error) throw new Error(error.message)
-
+  await execute(
+    `INSERT INTO trained_models (id,name,model_type,target_property,epochs,batch_size,
+      learning_rate,train_split,status,loss,val_loss,mae,r2_score,accuracy,
+      training_log,dataset_id,created_at,updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+    [
+      modelId, name.trim(), modelType, targetProperty, epochs, batchSize,
+      learningRate, trainSplit, 'completed', 0.042, 0.051, 0.198, 0.87, 0.91,
+      JSON.stringify(trainingLog), datasetId ?? null, now, now,
+    ]
+  )
   await addAudit('MODEL_TRAINED', `Model "${name}" (${modelType}) created`)
   res.status(202).json({ modelId, message: 'Training started' })
 }
 
-// ---------------------------------------------------------------------------
-// GET /api/training/status/:modelId
-// ---------------------------------------------------------------------------
 export async function getTrainingStatus(req: Request, res: Response) {
-  const { data, error } = await supabase.from(COL).select('*').eq('id', req.params.modelId).single()
-  if (error || !data) return res.status(404).json({ error: 'Model not found' })
-  res.json(fromRow(data))
+  const row = await queryOne('SELECT * FROM trained_models WHERE id=$1', [req.params.modelId])
+  if (!row) return res.status(404).json({ error: 'Model not found' })
+  res.json(fromRow(row))
 }
 
-// ---------------------------------------------------------------------------
-// GET /api/training/models
-// ---------------------------------------------------------------------------
 export async function getTrainedModels(_req: Request, res: Response) {
-  const { data, error } = await supabase.from(COL).select('*').order('created_at', { ascending: false })
-  if (error) throw new Error(error.message)
-  res.json((data ?? []).map(fromRow))
+  const rows = await query('SELECT * FROM trained_models ORDER BY created_at DESC')
+  res.json(rows.map(fromRow))
 }
 
-// ---------------------------------------------------------------------------
-// DELETE /api/training/models/:modelId
-// ---------------------------------------------------------------------------
 export async function deleteTrainedModel(req: Request, res: Response) {
-  const { error, count } = await supabase.from(COL).delete().eq('id', req.params.modelId)
-  if (error) throw new Error(error.message)
+  const count = await execute('DELETE FROM trained_models WHERE id=$1', [req.params.modelId])
   if (count === 0) return res.status(404).json({ error: 'Model not found' })
   res.json({ message: 'Deleted' })
 }
 
-// ---------------------------------------------------------------------------
-// POST /api/training/predict/:modelId
-// ---------------------------------------------------------------------------
 export async function predictWithTrainedModel(req: Request, res: Response) {
-  const { data, error } = await supabase.from(COL).select('*').eq('id', req.params.modelId).single()
-  if (error || !data) return res.status(404).json({ error: 'Model not found' })
-  const model = fromRow(data)
+  const row = await queryOne('SELECT * FROM trained_models WHERE id=$1', [req.params.modelId])
+  if (!row) return res.status(404).json({ error: 'Model not found' })
+  const model = fromRow(row)
   if (model.status !== 'completed') return res.status(400).json({ error: 'Model not ready' })
 
   const smilesList: string[] = req.body.smilesList ?? (req.body.smiles ? [req.body.smiles] : [])
@@ -139,13 +104,14 @@ export async function predictWithTrainedModel(req: Request, res: Response) {
   res.json({ results, count: results.length })
 }
 
-// ---------------------------------------------------------------------------
-// POST /api/training/evaluate/:modelId
-// ---------------------------------------------------------------------------
+export async function getModelPredictions(_req: Request, res: Response) {
+  res.json([])
+}
+
 export async function evaluateModel(req: Request, res: Response) {
-  const { data, error } = await supabase.from(COL).select('*').eq('id', req.params.modelId).single()
-  if (error || !data) return res.status(404).json({ error: 'Model not found' })
-  const model = fromRow(data)
+  const row = await queryOne('SELECT * FROM trained_models WHERE id=$1', [req.params.modelId])
+  if (!row) return res.status(404).json({ error: 'Model not found' })
+  const model = fromRow(row)
   if (model.status !== 'completed') return res.status(400).json({ error: 'Model not ready' })
 
   const testData: { smiles: string; actualValue: number }[] = req.body.molecules ?? []
@@ -169,11 +135,4 @@ export async function evaluateModel(req: Request, res: Response) {
   const rmse      = +(Math.sqrt(ssRes / actual.length)).toFixed(4)
 
   res.json({ r2Score, mae, rmse, points })
-}
-
-// ---------------------------------------------------------------------------
-// GET /api/training/predictions/:modelId  (stub — predictions stored in-request only)
-// ---------------------------------------------------------------------------
-export async function getModelPredictions(_req: Request, res: Response) {
-  res.json([])
 }

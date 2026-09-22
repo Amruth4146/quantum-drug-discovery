@@ -1,90 +1,76 @@
-import { supabase } from '../db/supabase'
+import { query, queryOne, execute } from '../db/supabase'
 import type { User } from '../types/user'
 
-// Map DB snake_case row → camelCase User
-function fromRow(row: Record<string, any>): User {
+function fromRow(r: any): User {
   return {
-    id:           row.id,
-    fullName:     row.full_name,
-    username:     row.username ?? undefined,
-    email:        row.email,
-    passwordHash: row.password_hash,
-    avatar:       row.avatar ?? undefined,
-    provider:     row.provider,
-    isVerified:   row.is_verified,
-    createdAt:    row.created_at,
-    updatedAt:    row.updated_at,
-    lastLoginAt:  row.last_login_at ?? undefined,
+    id:           r.id,
+    fullName:     r.full_name,
+    username:     r.username ?? undefined,
+    email:        r.email,
+    passwordHash: r.password_hash,
+    avatar:       r.avatar ?? undefined,
+    provider:     r.provider,
+    isVerified:   r.is_verified,
+    createdAt:    r.created_at,
+    updatedAt:    r.updated_at,
+    lastLoginAt:  r.last_login_at ?? undefined,
   }
 }
 
-// Map camelCase User → DB snake_case row
-function toRow(u: Partial<User>): Record<string, any> {
-  const row: Record<string, any> = {}
-  if (u.id           !== undefined) row.id            = u.id
-  if (u.fullName     !== undefined) row.full_name      = u.fullName
-  if (u.username     !== undefined) row.username       = u.username
-  if (u.email        !== undefined) row.email          = u.email
-  if (u.passwordHash !== undefined) row.password_hash  = u.passwordHash
-  if (u.avatar       !== undefined) row.avatar         = u.avatar
-  if (u.provider     !== undefined) row.provider       = u.provider
-  if (u.isVerified   !== undefined) row.is_verified    = u.isVerified
-  if (u.createdAt    !== undefined) row.created_at     = u.createdAt
-  if (u.updatedAt    !== undefined) row.updated_at     = u.updatedAt
-  if (u.lastLoginAt  !== undefined) row.last_login_at  = u.lastLoginAt
-  return row
-}
-
 export async function findUserByEmail(email: string): Promise<User | null> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('email', email.toLowerCase().trim())
-    .limit(1)
-    .single()
-  if (error || !data) return null
-  return fromRow(data)
+  const row = await queryOne(
+    'SELECT * FROM users WHERE email = $1 LIMIT 1',
+    [email.toLowerCase().trim()]
+  )
+  return row ? fromRow(row) : null
 }
 
 export async function findUserByUsername(username: string): Promise<User | null> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('username', username.toLowerCase().trim())
-    .limit(1)
-    .single()
-  if (error || !data) return null
-  return fromRow(data)
+  const row = await queryOne(
+    'SELECT * FROM users WHERE username = $1 LIMIT 1',
+    [username.toLowerCase().trim()]
+  )
+  return row ? fromRow(row) : null
 }
 
 export async function findUserById(id: string): Promise<User | null> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', id)
-    .single()
-  if (error || !data) return null
-  return fromRow(data)
+  const row = await queryOne('SELECT * FROM users WHERE id = $1', [id])
+  return row ? fromRow(row) : null
 }
 
 export async function createUser(user: User): Promise<void> {
-  const { error } = await supabase.from('users').insert(toRow(user))
-  if (error) throw new Error(`createUser failed: ${error.message}`)
+  await execute(
+    `INSERT INTO users (id, full_name, username, email, password_hash, avatar, provider,
+      is_verified, created_at, updated_at, last_login_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+    [
+      user.id, user.fullName, user.username ?? null, user.email,
+      user.passwordHash, user.avatar ?? null, user.provider,
+      user.isVerified, user.createdAt, user.updatedAt, user.lastLoginAt ?? null,
+    ]
+  )
 }
 
 export async function updateUser(id: string, data: Partial<User>): Promise<void> {
-  const { error } = await supabase
-    .from('users')
-    .update(toRow(data))
-    .eq('id', id)
-  if (error) throw new Error(`updateUser failed: ${error.message}`)
+  const fields: string[] = []
+  const values: any[] = []
+  let i = 1
+
+  if (data.fullName    !== undefined) { fields.push(`full_name=$${i++}`);    values.push(data.fullName) }
+  if (data.username    !== undefined) { fields.push(`username=$${i++}`);     values.push(data.username) }
+  if (data.email       !== undefined) { fields.push(`email=$${i++}`);        values.push(data.email) }
+  if (data.passwordHash!== undefined) { fields.push(`password_hash=$${i++}`);values.push(data.passwordHash) }
+  if (data.avatar      !== undefined) { fields.push(`avatar=$${i++}`);       values.push(data.avatar) }
+  if (data.isVerified  !== undefined) { fields.push(`is_verified=$${i++}`);  values.push(data.isVerified) }
+  if (data.updatedAt   !== undefined) { fields.push(`updated_at=$${i++}`);   values.push(data.updatedAt) }
+  if (data.lastLoginAt !== undefined) { fields.push(`last_login_at=$${i++}`);values.push(data.lastLoginAt) }
+
+  if (!fields.length) return
+  values.push(id)
+  await execute(`UPDATE users SET ${fields.join(',')} WHERE id=$${i}`, values)
 }
 
 export async function listAllUsers(): Promise<User[]> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .order('created_at', { ascending: false })
-  if (error) throw new Error(`listAllUsers failed: ${error.message}`)
-  return (data ?? []).map(fromRow)
+  const rows = await query('SELECT * FROM users ORDER BY created_at DESC')
+  return rows.map(fromRow)
 }
