@@ -1,0 +1,20 @@
+node_modules
+dist
+.env
+.env.local
+*.local
+uploads
+*.log
+
+# Firebase service account keys — never commit these
+*firebase-adminsdk*.json
+*service-account*.json
+*serviceAccount*.json
+
+# Keep data folder for seed but ignore user-generated files
+server/data/users.json
+server/data/auditLogs.json
+server/data/favorites.json
+server/data/experiments.json
+server/data/trainedModels.json
+server/data/mlPredictions.json

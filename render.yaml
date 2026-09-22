@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: quantum-drug-discovery-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        value: https://klxzgzpurdsovowneb.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: BCRYPT_ROUNDS
+        value: 12
+      - key: ALLOWED_ORIGINS
+        value: https://virtual-drug-discovery.web.app,https://virtual-drug-discovery.firebaseapp.com
+      - key: RENDER_EXTERNAL_URL
+        value: https://quantum-drug-discovery-api.onrender.com
