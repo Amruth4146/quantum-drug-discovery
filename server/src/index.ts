@@ -54,6 +54,16 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 app.use(auditLogger)
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }))
+
+// Manual seed trigger — call POST /api/admin/seed to force seeding after cold-start failures
+app.post('/api/admin/seed', async (_req, res) => {
+  try {
+    await ensureSeeded()
+    res.json({ message: 'Seed completed or already seeded' })
+  } catch (e: any) {
+    res.status(500).json({ error: (e as Error).message })
+  }
+})
 app.use('/api', apiRoutes)
 
 app.use((_req: Request, res: Response) => {
@@ -72,10 +82,10 @@ const server = app.listen(PORT, () => {
         break
       } catch (e: any) {
         console.error(`[Seed] attempt ${attempt} failed: ${e.message}`)
-        if (attempt < 5) await new Promise(r => setTimeout(r, attempt * 2000))
+        if (attempt < 5) await new Promise(r => setTimeout(r, attempt * 3000))
       }
     }
-  }, 3000)
+  }, 5000)
 })
 
 server.on('error', (err: any) => {
