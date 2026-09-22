@@ -7,11 +7,11 @@ import NotificationBell from '../ui/NotificationBell'
 
 const tabs = [
   { label: 'Dashboard',   path: '/app/dashboard' },
+  { label: 'Molecules',   path: '/app/search' },
   { label: 'Analysis',    path: '/app/analysis' },
   { label: 'Predictions', path: '/app/predictions' },
   { label: 'Experiments', path: '/app/experiments' },
   { label: 'Training',    path: '/app/training' },
-  { label: 'Search',      path: '/app/search' },
   { label: 'Tools',       path: '/app/tools' },
   { label: 'Audit',       path: '/app/audit' },
 ]

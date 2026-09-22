@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Search, FileText, StickyNote, Loader2, ChevronLeft, ChevronRight, X, Filter } from 'lucide-react'
+import { Search, FileText, StickyNote, Loader2, ChevronLeft, ChevronRight, X, Filter, Atom } from 'lucide-react'
 import { toast } from 'sonner'
 import { getMolecules } from '../../services/api'
 import MoleculeReportModal from '../ui/MoleculeReportModal'
@@ -174,9 +174,10 @@ export default function MoleculeSearchTab() {
                     <StickyNote size={14} />
                   </button>
                   <button onClick={() => setSelected(m)}
-                    className="p-1.5 rounded-lg text-slate-500 hover:text-purple-400 hover:bg-slate-700/50 transition-colors"
-                    title="View report">
-                    <FileText size={14} />
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 hover:text-white transition-colors text-xs font-medium"
+                    title="View 2D / 3D structure">
+                    <Atom size={13} />
+                    2D / 3D
                   </button>
                 </div>
               </div>

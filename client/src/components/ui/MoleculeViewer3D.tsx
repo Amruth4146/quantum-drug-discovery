@@ -1,201 +1,217 @@
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, RotateCcw } from 'lucide-react'
+import { Loader2, AlertCircle, RotateCcw, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
 
 interface Props { smiles: string }
 
-// Atom colors by element symbol
-const ATOM_COLORS: Record<string, string> = {
-  C: '#909090', N: '#3050F8', O: '#FF0D0D', H: '#FFFFFF',
-  S: '#FFFF30', P: '#FF8000', F: '#90E050', Cl: '#1FF01F',
-  Br: '#A62929', I: '#940094',
-}
-
-// Rough covalent radii (Å) scaled for display
-const ATOM_RADIUS: Record<string, number> = {
-  C: 0.4, N: 0.38, O: 0.35, H: 0.25, S: 0.5, P: 0.5,
-  F: 0.32, Cl: 0.5, Br: 0.55, I: 0.6,
-}
-
-// Parse SMILES into atoms with 3D-like positions using a simple ring layout
-function parseSMILES(smiles: string) {
-  const atoms: { symbol: string; x: number; y: number; z: number }[] = []
-  const bonds: { a: number; b: number }[] = []
-
-  // Extract atom symbols
-  const atomRegex = /Cl|Br|[BCNOFPSI]|[a-z]/g
+// Converts SMILES to a minimal SDF/MOL block for 3Dmol
+// We use a simple coordinate generation approach
+function smilesToAtoms(smiles: string) {
+  // Parse atoms from SMILES
+  const atomRegex = /Cl|Br|Si|Se|Te|[BCNOPSFIcnops]/g
+  const atoms: { element: string; x: number; y: number; z: number }[] = []
   let match
+
   while ((match = atomRegex.exec(smiles)) !== null) {
     const sym = match[0]
-    const symbol = sym === sym.toLowerCase() ? sym.toUpperCase() : sym
-    atoms.push({ symbol, x: 0, y: 0, z: 0 })
+    const el = sym.charAt(0).toUpperCase() + sym.slice(1).toLowerCase()
+    atoms.push({ element: el === 'C' && sym === 'c' ? 'C' : el, x: 0, y: 0, z: 0 })
   }
 
-  if (!atoms.length) return { atoms, bonds }
+  if (!atoms.length) return null
 
-  // Arrange atoms in a 3D spiral layout
+  // Assign 3D coordinates using a helical layout
   const n = atoms.length
   atoms.forEach((a, i) => {
-    const t = (i / Math.max(n - 1, 1)) * Math.PI * 2.5
-    const r = 1.5 + i * 0.15
-    a.x = r * Math.cos(t)
-    a.y = r * Math.sin(t)
-    a.z = (i / n) * 2 - 1
+    const angle  = i * (Math.PI * 2.0 / Math.max(n * 0.4, 6))
+    const rise   = i * 0.35
+    const radius = Math.min(1.5 + n * 0.05, 3.5)
+    a.x = radius * Math.cos(angle)
+    a.y = radius * Math.sin(angle)
+    a.z = rise - (n * 0.35) / 2
   })
 
-  // Connect sequential atoms
-  for (let i = 0; i < atoms.length - 1; i++) {
-    bonds.push({ a: i, b: i + 1 })
-  }
-  // Add a few ring-closing bonds for visual interest
-  if (n > 5) bonds.push({ a: 0, b: Math.floor(n / 2) })
-  if (n > 8) bonds.push({ a: 1, b: n - 2 })
+  return atoms
+}
 
-  return { atoms, bonds }
+// Build a minimal XYZ format string for 3Dmol
+function buildXYZ(smiles: string): string | null {
+  const atoms = smilesToAtoms(smiles)
+  if (!atoms) return null
+  const lines = [String(atoms.length), 'Generated from SMILES']
+  atoms.forEach(a => {
+    lines.push(`${a.element}  ${a.x.toFixed(4)}  ${a.y.toFixed(4)}  ${a.z.toFixed(4)}`)
+  })
+  return lines.join('\n')
 }
 
 export default function MoleculeViewer3D({ smiles }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const animRef   = useRef<number>(0)
-  const rotRef    = useRef({ x: 0, y: 0 })
-  const dragRef   = useRef({ dragging: false, lastX: 0, lastY: 0 })
-  const [loading, setLoading] = useState(true)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const viewerRef    = useRef<any>(null)
+  const [status,   setStatus]   = useState<'loading' | 'done' | 'error'>('loading')
+  const [style,    setStyle]    = useState<'stick' | 'sphere' | 'line' | 'cartoon'>('stick')
 
+  // Initialise 3Dmol viewer
   useEffect(() => {
-    if (!smiles || !canvasRef.current) return
-    setLoading(true)
+    if (!containerRef.current || !smiles) return
+    setStatus('loading')
+    let cancelled = false
 
-    const canvas = canvasRef.current
-    const ctx    = canvas.getContext('2d')!
-    const W = canvas.width  = canvas.offsetWidth
-    const H = canvas.height = canvas.offsetHeight
+    import('3dmol').then(($3Dmol) => {
+      if (cancelled || !containerRef.current) return
 
-    const { atoms, bonds } = parseSMILES(smiles)
-    setLoading(false)
+      // Clean up previous viewer
+      if (viewerRef.current) {
+        try { viewerRef.current.clear() } catch {}
+      }
+      containerRef.current.innerHTML = ''
 
-    // Project 3D → 2D with rotation
-    const project = (x: number, y: number, z: number) => {
-      const rx = rotRef.current.x
-      const ry = rotRef.current.y
-      // Rotate Y
-      const x1 = x * Math.cos(ry) - z * Math.sin(ry)
-      const z1 = x * Math.sin(ry) + z * Math.cos(ry)
-      // Rotate X
-      const y2 = y * Math.cos(rx) - z1 * Math.sin(rx)
-      const z2 = y * Math.sin(rx) + z1 * Math.cos(rx)
-      const fov = 6
-      const scale = fov / (fov + z2)
-      return {
-        sx: W / 2 + x1 * scale * 60,
-        sy: H / 2 + y2 * scale * 60,
-        scale,
+      try {
+        const viewer = ($3Dmol as any).createViewer(containerRef.current, {
+          backgroundColor: '0x0f172a',
+          antialias:       true,
+          id:              `viewer-${Date.now()}`,
+        })
+        viewerRef.current = viewer
+
+        const xyz = buildXYZ(smiles)
+        if (!xyz) { setStatus('error'); return }
+
+        viewer.addModel(xyz, 'xyz')
+        applyStyle(viewer, style)
+        viewer.zoomTo()
+        viewer.render()
+        viewer.spin('y', 0.5)
+
+        setStatus('done')
+      } catch (e) {
+        console.error('[3Dmol] error:', e)
+        setStatus('error')
+      }
+    }).catch(() => {
+      if (!cancelled) setStatus('error')
+    })
+
+    return () => {
+      cancelled = true
+      if (viewerRef.current) {
+        try { viewerRef.current.spin(false) } catch {}
       }
     }
-
-    const draw = () => {
-      ctx.clearRect(0, 0, W, H)
-      ctx.fillStyle = '#0f172a'
-      ctx.fillRect(0, 0, W, H)
-
-      // Draw bonds
-      bonds.forEach(b => {
-        const a = atoms[b.a], bb = atoms[b.b]
-        const pa = project(a.x, a.y, a.z)
-        const pb = project(bb.x, bb.y, bb.z)
-        ctx.beginPath()
-        ctx.moveTo(pa.sx, pa.sy)
-        ctx.lineTo(pb.sx, pb.sy)
-        ctx.strokeStyle = '#475569'
-        ctx.lineWidth = 1.5
-        ctx.stroke()
-      })
-
-      // Draw atoms sorted by z (painter's algorithm)
-      const projected = atoms.map((a, i) => ({ ...project(a.x, a.y, a.z), atom: a, i }))
-      projected.sort((a, b) => a.scale - b.scale)
-
-      projected.forEach(({ sx, sy, scale, atom }) => {
-        const r = (ATOM_RADIUS[atom.symbol] ?? 0.4) * scale * 60
-        const color = ATOM_COLORS[atom.symbol] ?? '#aaaaaa'
-
-        // Sphere gradient
-        const grad = ctx.createRadialGradient(sx - r * 0.3, sy - r * 0.3, r * 0.1, sx, sy, r)
-        grad.addColorStop(0, lighten(color))
-        grad.addColorStop(1, darken(color))
-
-        ctx.beginPath()
-        ctx.arc(sx, sy, Math.max(r, 3), 0, Math.PI * 2)
-        ctx.fillStyle = grad
-        ctx.fill()
-
-        // Label for non-H atoms
-        if (atom.symbol !== 'H' && r > 8) {
-          ctx.fillStyle = '#ffffff'
-          ctx.font = `bold ${Math.round(r * 0.9)}px sans-serif`
-          ctx.textAlign = 'center'
-          ctx.textBaseline = 'middle'
-          ctx.fillText(atom.symbol, sx, sy)
-        }
-      })
-
-      animRef.current = requestAnimationFrame(draw)
-    }
-
-    animRef.current = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(animRef.current)
   }, [smiles])
 
-  // Mouse drag to rotate
-  const onMouseDown = (e: React.MouseEvent) => {
-    dragRef.current = { dragging: true, lastX: e.clientX, lastY: e.clientY }
-  }
-  const onMouseMove = (e: React.MouseEvent) => {
-    if (!dragRef.current.dragging) return
-    const dx = e.clientX - dragRef.current.lastX
-    const dy = e.clientY - dragRef.current.lastY
-    rotRef.current.y += dx * 0.01
-    rotRef.current.x += dy * 0.01
-    dragRef.current.lastX = e.clientX
-    dragRef.current.lastY = e.clientY
-  }
-  const onMouseUp = () => { dragRef.current.dragging = false }
+  // Re-apply style when it changes
+  useEffect(() => {
+    if (viewerRef.current && status === 'done') {
+      applyStyle(viewerRef.current, style)
+      viewerRef.current.render()
+    }
+  }, [style, status])
 
-  const reset = () => { rotRef.current = { x: 0, y: 0 } }
+  const reset = () => {
+    if (viewerRef.current) {
+      viewerRef.current.zoomTo()
+      viewerRef.current.render()
+    }
+  }
+
+  const zoom = (factor: number) => {
+    if (viewerRef.current) {
+      viewerRef.current.zoom(factor)
+      viewerRef.current.render()
+    }
+  }
 
   return (
-    <div className="relative w-full h-full rounded-xl overflow-hidden bg-slate-900 border border-white/5">
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Loader2 size={20} className="animate-spin text-purple-400" />
+    <div className="relative w-full h-full rounded-xl overflow-hidden bg-[#0f172a] border border-white/5">
+
+      {/* Loading */}
+      {status === 'loading' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10 bg-[#0f172a]">
+          <Loader2 size={22} className="animate-spin text-purple-400" />
+          <p className="text-xs text-slate-500">Loading 3D model…</p>
         </div>
       )}
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full cursor-grab active:cursor-grabbing"
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
-      />
-      <button onClick={reset}
-        className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-slate-800/80 text-slate-400 hover:text-white transition-colors"
-        title="Reset rotation">
-        <RotateCcw size={13} />
-      </button>
-      <p className="absolute bottom-2 left-2 text-xs text-slate-600">Drag to rotate</p>
+
+      {/* Error */}
+      {status === 'error' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10 bg-[#0f172a]">
+          <AlertCircle size={22} className="text-red-400" />
+          <p className="text-xs text-slate-500">3D rendering unavailable</p>
+        </div>
+      )}
+
+      {/* 3Dmol container */}
+      <div ref={containerRef} className="w-full h-full" />
+
+      {/* Controls */}
+      {status === 'done' && (
+        <div className="absolute top-2 right-2 flex flex-col gap-1 z-20">
+          <button onClick={() => zoom(1.2)}
+            className="p-1.5 rounded-lg bg-slate-800/80 text-slate-400 hover:text-white transition-colors"
+            title="Zoom in">
+            <ZoomIn size={13} />
+          </button>
+          <button onClick={() => zoom(0.8)}
+            className="p-1.5 rounded-lg bg-slate-800/80 text-slate-400 hover:text-white transition-colors"
+            title="Zoom out">
+            <ZoomOut size={13} />
+          </button>
+          <button onClick={reset}
+            className="p-1.5 rounded-lg bg-slate-800/80 text-slate-400 hover:text-white transition-colors"
+            title="Reset view">
+            <RotateCcw size={13} />
+          </button>
+        </div>
+      )}
+
+      {/* Style selector */}
+      {status === 'done' && (
+        <div className="absolute bottom-2 left-2 flex gap-1 z-20">
+          {(['stick', 'sphere', 'line'] as const).map(s => (
+            <button key={s} onClick={() => setStyle(s)}
+              className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                style === s
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-slate-800/80 text-slate-400 hover:text-white'
+              }`}>
+              {s.charAt(0).toUpperCase() + s.slice(1)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <p className="absolute bottom-2 right-2 text-xs text-slate-700 z-20">Drag to rotate</p>
     </div>
   )
 }
 
-function lighten(hex: string): string {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgb(${Math.min(r + 80, 255)},${Math.min(g + 80, 255)},${Math.min(b + 80, 255)})`
-}
+function applyStyle(viewer: any, style: string) {
+  viewer.setStyle({}, {})
 
-function darken(hex: string): string {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgb(${Math.max(r - 40, 0)},${Math.max(g - 40, 0)},${Math.max(b - 40, 0)})`
+  const colorScheme = {
+    colorscheme: {
+      prop: 'elem',
+      map: {
+        C:  '#e2e8f0', N: '#60a5fa', O: '#f87171',
+        S:  '#fbbf24', P: '#fb923c', F: '#34d399',
+        Cl: '#34d399', Br:'#fb923c', I: '#a78bfa',
+        H:  '#94a3b8',
+      },
+    },
+  }
+
+  if (style === 'stick') {
+    viewer.setStyle({}, {
+      stick: { radius: 0.15, ...colorScheme },
+      sphere: { radius: 0.3, ...colorScheme },
+    })
+  } else if (style === 'sphere') {
+    viewer.setStyle({}, {
+      sphere: { radius: 0.5, ...colorScheme },
+    })
+  } else if (style === 'line') {
+    viewer.setStyle({}, {
+      line: { linewidth: 2, ...colorScheme },
+    })
+  }
 }
