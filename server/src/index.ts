@@ -61,11 +61,21 @@ app.use((_req: Request, res: Response) => {
 })
 app.use(errorHandler)
 
-const server = app.listen(PORT, async () => {
+const server = app.listen(PORT, () => {
   console.log(`[${new Date().toISOString()}] Server running on http://localhost:${PORT}`)
-  // Seed built-in dataset if DB is empty
-  await ensureSeeded().catch(e => console.error('[Seed] failed:', e.message))
   startKeepAlive()
+  // Delay seed to allow network/Supabase to be ready
+  setTimeout(async () => {
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        await ensureSeeded()
+        break
+      } catch (e: any) {
+        console.error(`[Seed] attempt ${attempt} failed: ${e.message}`)
+        if (attempt < 5) await new Promise(r => setTimeout(r, attempt * 2000))
+      }
+    }
+  }, 3000)
 })
 
 server.on('error', (err: any) => {
