@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Atom, Sun, Moon, LogOut, ChevronDown, User, Menu, X } from 'lucide-react'
+import { Atom, LogOut, ChevronDown, User, Menu, X } from 'lucide-react'
 import { checkBackendHealth } from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
 import NotificationBell from '../ui/NotificationBell'
@@ -21,10 +21,6 @@ export default function Navbar() {
   const navigate         = useNavigate()
   const { user, logout } = useAuth()
   const [online,    setOnline]    = useState<boolean | null>(null)
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem('vdd_theme')
-    return saved ? saved === 'dark' : true // default dark
-  })
   const [menuOpen,  setMenuOpen]  = useState(false)
   const [mobileNav, setMobileNav] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -35,11 +31,6 @@ export default function Navbar() {
     const id = setInterval(check, 15_000)
     return () => clearInterval(id)
   }, [])
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('light', !dark)
-    localStorage.setItem('vdd_theme', dark ? 'dark' : 'light')
-  }, [dark])
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -95,12 +86,6 @@ export default function Navbar() {
             online === null ? 'bg-slate-500 animate-pulse' :
             online ? 'bg-green-400' : 'bg-red-500'
           }`} title={online === null ? 'Checking…' : online ? 'Connected' : 'Offline'} />
-
-          {/* Theme toggle */}
-          <button onClick={() => setDark(d => !d)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
-            {dark ? <Sun size={15} /> : <Moon size={15} />}
-          </button>
 
           {/* Notifications */}
           <NotificationBell />
